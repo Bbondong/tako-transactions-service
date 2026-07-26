@@ -1,7 +1,6 @@
 from flask import Blueprint, jsonify, request
-from src.services.transactions_service import create_new_ride, get_ride_by_id, update_driver_location, get_driver_location_by_id
-from src.models.ride_model import db as ride_db
-from src.models.driver_location_model import db as driver_location_db
+from src.services.transactions_service import create_new_ride, get_ride_by_id, update_driver_location, get_driver_location_by_id, get_available_offers, get_client_location_for_ride
+from src.data import db
 
 transactions_bp = Blueprint("transactions", __name__)
 
@@ -64,3 +63,15 @@ def get_driver_location(driver_id):
         "longitude": driver_loc.longitude,
         "timestamp": driver_loc.timestamp.isoformat()
     }), 200
+
+@transactions_bp.route("/offers", methods=["GET"])
+def get_offers():
+    offers = get_available_offers()
+    return jsonify(offers), 200
+
+@transactions_bp.route("/client_location/<int:ride_id>", methods=["GET"])
+def get_client_location(ride_id):
+    location = get_client_location_for_ride(ride_id)
+    if not location:
+        return jsonify({"message": "Client location not found for this ride"}), 404
+    return jsonify(location), 200

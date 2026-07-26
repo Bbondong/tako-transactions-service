@@ -8,6 +8,8 @@ Le **Tako Transactions Service** gère toutes les opérations liées aux courses
 
 - **Gestion des courses** : Création, mise à jour et consultation des détails des courses.
 - **Suivi de localisation** : Enregistrement et récupération des positions GPS des chauffeurs en temps réel.
+- **Offres en temps réel** : Permet aux chauffeurs de consulter les courses disponibles.
+- **Localisation client** : Fournit la localisation de départ du client pour une course donnée.
 - **Statuts de course** : Gestion des différents états d'une course (en attente, acceptée, en cours, terminée, annulée).
 - **Historique des transactions** : Permet de consulter les courses passées.
 
@@ -21,6 +23,7 @@ transactions_service/
 ├── requirements.txt    # Dépendances Python
 └── src/
     ├── __init__.py
+    ├── data.py         # Initialisation de l'objet SQLAlchemy 'db'
     ├── models/         # Définition des modèles de données (ex: Ride, DriverLocation)
     │   ├── ride_model.py
     │   └── driver_location_model.py
@@ -70,6 +73,8 @@ Il est essentiel de remplacer `user`, `password`, et `db` par les informations d
 -   `POST /driver_location` : Met à jour la localisation d'un chauffeur.
     -   **Requête** : `{"driver_id": 101, "latitude": 48.8584, "longitude": 2.2945}`
 -   `GET /driver_location/<int:driver_id>` : Récupère la dernière localisation connue d'un chauffeur.
+-   `GET /offers` : Récupère toutes les offres de courses disponibles en temps réel.
+-   `GET /client_location/<int:ride_id>` : Récupère la localisation de départ du client pour une course donnée.
 
 ## Déploiement
 

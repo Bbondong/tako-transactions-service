@@ -1,7 +1,5 @@
-from flask_sqlalchemy import SQLAlchemy
+from src.data import db
 from datetime import datetime
-
-db = SQLAlchemy()
 
 class Ride(db.Model):
     id = db.Column(db.Integer, primary_key=True)

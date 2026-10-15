@@ -1,16 +1,23 @@
 from flask import Flask
-from src.data import db
-from src.routes.transactions_routes import transactions_bp
+
+from securite.securite import init_security
+from src.routes.client_courses import client_courses_bp
+from src.routes.driver_courses import driver_courses_bp
 
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = "mysql+mysqlconnector://user:password@db/transactions_db"
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-db.init_app(app)
+# Même protection que l'auth-service : la Gateway passe avec sa clé interne,
+# les appels directs sont filtrés (limite de débit, pare-feu).
+init_security(app)
 
-app.register_blueprint(transactions_bp)
+app.register_blueprint(client_courses_bp)
+app.register_blueprint(driver_courses_bp)
 
-if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()
-    app.run(host="0.0.0.0", port=5002)
+
+@app.get('/')
+def health():
+    return {'status': 'ok', 'service': 'tako-transactions-service'}
+
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5002)

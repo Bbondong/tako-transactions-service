@@ -1,89 +1,70 @@
 # Tako Transactions Service
 
-## Description
+Service dédié aux **courses** : création par le client, offres aux
+chauffeurs proches, acceptation, suivi GPS des deux côtés, étapes de
+livraison, annulation, et **historique conservé en base**.
 
-Le **Tako Transactions Service** gère toutes les opérations liées aux courses (rides) et au suivi de la localisation des chauffeurs et des colis. Il est le cœur opérationnel de l'application Tako, permettant de coordonner les déplacements et d'assurer la visibilité en temps réel.
-
-## Fonctionnalités
-
-- **Gestion des courses** : Création, mise à jour et consultation des détails des courses.
-- **Suivi de localisation** : Enregistrement et récupération des positions GPS des chauffeurs en temps réel.
-- **Offres en temps réel** : Permet aux chauffeurs de consulter les courses disponibles.
-- **Localisation client** : Fournit la localisation de départ du client pour une course donnée.
-- **Statuts de course** : Gestion des différents états d'une course (en attente, acceptée, en cours, terminée, annulée).
-- **Historique des transactions** : Permet de consulter les courses passées.
-
-## Architecture
-
-Le service est développé en Python avec Flask et Flask-SQLAlchemy, et utilise MySQL comme base de données. Il suit une architecture modulaire :
-
-```text
-transactions_service/
-├── app.py              # Point d'entrée principal de l'application Flask
-├── requirements.txt    # Dépendances Python
-└── src/
-    ├── __init__.py
-    ├── data.py         # Initialisation de l'objet SQLAlchemy 'db'
-    ├── models/         # Définition des modèles de données (ex: Ride, DriverLocation)
-    │   ├── ride_model.py
-    │   └── driver_location_model.py
-    ├── routes/         # Définition des routes API pour les transactions et la localisation
-    │   └── transactions_routes.py
-    └── services/       # Logique métier et interaction avec les modèles
-        └── transactions_service.py
-```
+Il partage la base MySQL de `tako-auth-service` (tables `courses`,
+`course_positions`, `driver_presence`, `user`) et accepte les jetons JWT
+qu'il émet : aucune session n'est créée ici.
 
 ## Configuration
 
-La connexion à la base de données MySQL est configurée dans `app.py`:
+Copier le `.env` de `tako-auth-service` (il n'est jamais commité) :
 
-```python
-app.config["SQLALCHEMY_DATABASE_URI"] = "mysql+mysqlconnector://user:password@db/transactions_db"
+| Variable | Rôle |
+|---|---|
+| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | base commune |
+| `TAKO_JWT_SECRET` | même secret que l'auth-service (vérification des jetons) |
+| `TAKO_CLIENT_ROLE_ID`, `TAKO_DRIVER_ROLE_ID` | rôles `id_tpcompte` client et chauffeur |
+| `TAKO_API_KEY` | clé interne envoyée par la Gateway (`X-Internal-Key`) |
+| `CLOUDINARY_*` | envoi de la photo de la marchandise |
+
+`TAKO_DRIVER_ROLE_ID` est obligatoire pour toutes les routes chauffeur.
+
+## Installation
+
+```bash
+python -m venv .venv && .venv/bin/pip install -r requirements.txt
+.venv/bin/python migrate.py      # crée la table d'historique (idempotent)
+.venv/bin/python app.py          # http://localhost:5002
 ```
 
-Il est essentiel de remplacer `user`, `password`, et `db` par les informations d'identification et l'adresse de votre serveur MySQL. En production, utilisez des variables d'environnement pour ces informations sensibles.
+Côté Gateway : `TRANSACTIONS_SERVICE_URL` doit pointer vers ce service.
+Les apps l'appellent sous `/transactions/…` avec la clé client.
 
-## Installation et Exécution (Développement)
+## Historique
 
-1.  **Cloner le dépôt** :
-    ```bash
-    git clone https://github.com/Bbondong/tako-transactions-service.git
-    cd tako-transactions-service
-    ```
+`course_status_history` reçoit une ligne à chaque étape — création
+(`pending`), acceptation (`assigned`), arrivée (`arrived`), départ
+(`in_transit`), livraison (`delivered`), annulation (`cancelled`) — avec
+l'acteur, son compte, la position et l'heure. Les lignes ne sont jamais
+modifiées. Chaque réponse de course renvoie cette chronologie
+(`timeline`).
 
-2.  **Créer un environnement virtuel et installer les dépendances** :
-    ```bash
-    python -m venv venv
-    source venv/bin/activate  # Sur Windows: .\venv\Scripts\activate
-    pip install -r requirements.txt
-    ```
+## Routes (préfixe `/api/v1`)
 
-3.  **Lancer le service** :
-    ```bash
-    python app.py
-    ```
-    Le service sera accessible sur `http://localhost:5002`.
+Client (jeton client) :
 
-## Endpoints API
+- `POST /courses` — créer une course (prix et véhicule fournis par l'app)
+- `GET /courses` — historique du client
+- `GET /courses/<id>` ou `/courses/<id>/positions` — course, positions, chronologie
+- `PUT /courses/<id>/position` — position GPS du client
+- `POST /courses/<id>/cancel` — annuler (avant récupération du colis)
 
--   `GET /` : Health check du service Transactions.
--   `POST /rides` : Crée une nouvelle course.
-    -   **Requête** : `{"passenger_id": 1, "start_location_lat": 48.8566, "start_location_lon": 2.3522}`
--   `GET /rides/<int:ride_id>` : Récupère les détails d'une course spécifique.
--   `POST /driver_location` : Met à jour la localisation d'un chauffeur.
-    -   **Requête** : `{"driver_id": 101, "latitude": 48.8584, "longitude": 2.2945}`
--   `GET /driver_location/<int:driver_id>` : Récupère la dernière localisation connue d'un chauffeur.
--   `GET /offers` : Récupère toutes les offres de courses disponibles en temps réel.
--   `GET /client_location/<int:ride_id>` : Récupère la localisation de départ du client pour une course donnée.
+Chauffeur (jeton chauffeur) :
 
-## Déploiement
+- `PUT /driver/presence` — en ligne / hors ligne avec position (toutes les < 30 s)
+- `GET /driver/courses/available` — offres à moins de 15 km
+- `POST /driver/courses/<id>/accept` — accepter (un seul chauffeur gagne)
+- `GET /driver/courses/active` — course en cours
+- `GET /driver/courses/history` — courses du chauffeur
+- `GET /driver/courses/<id>/positions` — course, positions, chronologie
+- `PUT /driver/courses/<id>/position` — position GPS du chauffeur
+- `PUT /driver/courses/<id>/status` — `arrived` → `in_transit` → `delivered`
 
-Pour un déploiement en production, il est recommandé d'utiliser Docker et un serveur WSGI comme Gunicorn. Un `Dockerfile` sera ajouté ultérieurement pour faciliter ce processus.
+## Tests
 
-## Contribution
-
-Les contributions sont les bienvenues. Veuillez suivre les directives de contribution et soumettre des pull requests.
-
-## Licence
-
-Ce projet est sous licence MIT. Voir le fichier `LICENSE` pour plus de détails.
+```bash
+.venv/bin/python -m unittest discover -s tests -v
+```

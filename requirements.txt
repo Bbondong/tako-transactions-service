@@ -1,3 +1,6 @@
-Flask==2.3.2
-Flask-SQLAlchemy==3.1.1
-mysql-connector-python==8.0.33
+Flask
+pymysql
+python-dotenv
+Werkzeug
+cloudinary
+PyJWT>=2.8,<3

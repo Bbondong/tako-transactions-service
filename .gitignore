@@ -1,0 +1,8 @@
+# Secrets (copie du .env de l'auth-service : base MySQL, JWT, clé interne)
+.env
+
+# Environnements virtuels et caches
+/venv
+/.venv
+__pycache__/
+.pytest_cache/
